@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from any4hdmi.core.format import find_dataset_root, load_manifest
-from any4hdmi.scripts.viewer import _resolve_motion_path
+from any4hdmi.scripts.viewer import _resolve_motion_path, dataset_motions, initial_motion_label
 
 
 class ViewerTest(unittest.TestCase):
@@ -51,6 +51,22 @@ class ViewerTest(unittest.TestCase):
             mjcf.symlink_to(blob)
 
             self.assertEqual(load_manifest(dataset_root).mjcf_path, mjcf)
+
+    def test_dataset_motions_lists_nested_clips_and_selects_requested_file(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            dataset_root = Path(temp_dir)
+            motions_root = dataset_root / "motions"
+            nested = motions_root / "group"
+            nested.mkdir(parents=True)
+            (dataset_root / "manifest.json").write_text('{"motions_subdir": "motions"}')
+            (motions_root / "b.npz").write_bytes(b"")
+            (nested / "a.npz").write_bytes(b"")
+
+            motions = dataset_motions(dataset_root, load_manifest(dataset_root))
+
+            self.assertEqual([label for label, _ in motions], ["b.npz", "group/a.npz"])
+            self.assertEqual(initial_motion_label(nested / "a.npz", motions), "group/a.npz")
+            self.assertEqual(initial_motion_label(dataset_root, motions), "b.npz")
 
 if __name__ == "__main__":
     unittest.main()
