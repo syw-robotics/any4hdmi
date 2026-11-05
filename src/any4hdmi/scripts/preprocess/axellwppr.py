@@ -12,12 +12,10 @@ from typing import Any, Iterator
 import numpy as np
 from tqdm import tqdm
 
-from any4hdmi.core.format import MOTION_DTYPE, MOTIONS_SUBDIR, repo_root, save_motion, write_manifest
-from any4hdmi.core.model import base_qpos_adr, joint_qpos_adrs, load_model
-from any4hdmi.utils.mjcf import (
-    qpos_names_from_model,
-    resolve_mjcf_path,
-)
+from any4hdmi.core.format import MOTION_DTYPE, MOTIONS_SUBDIR, save_motion, write_manifest
+from any4hdmi.core.model import base_qpos_adr, joint_qpos_adrs
+from any4hdmi.scripts.preprocess.common import load_conversion_model, resolve_output_dir
+from any4hdmi.utils.mjcf import qpos_names_from_model
 
 
 DEFAULT_INPUT_PATH = Path.home() / "Downloads" / "100style.tar"
@@ -313,14 +311,10 @@ def _validate_meta(
 def main() -> None:
     args = _parse_args()
 
-    out_dir = Path(args.out_dir).expanduser()
-    if not out_dir.is_absolute():
-        out_dir = repo_root() / out_dir
-    out_dir = out_dir.resolve()
+    out_dir = resolve_output_dir(args.out_dir)
 
     mjcf_reference = _resolve_mjcf_argument(str(args.mjcf))
-    mjcf_path = resolve_mjcf_path(mjcf_reference)
-    model = load_model(mjcf_path)
+    model = load_conversion_model(mjcf_reference)
     qpos_names = qpos_names_from_model(model)
     base_adr = base_qpos_adr(model)
 

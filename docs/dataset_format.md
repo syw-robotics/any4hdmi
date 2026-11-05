@@ -131,6 +131,18 @@ In all three cases:
 3. `format_version` is `2`.
 4. `mjcf` is emitted as an `hf://...` reference by default.
 
+### Converter Code Organization
+
+Source-specific parsing, coordinate/rotation conversion, joint mapping, and segment
+handling stay in each converter module. Shared CSV CLI arguments, Hugging Face
+MJCF arguments, output directory resolution, model loading notices, and frame
+slicing live in `src/any4hdmi/scripts/preprocess/common.py`.
+
+Motion serialization and manifest writing are shared through `save_motion()` and
+`write_manifest()` in `src/any4hdmi/core/format.py`. A new source format can reuse
+these helpers and provide its own reader and mapping to MuJoCo `qpos`. Datasets
+with the same source schema can reuse an existing converter.
+
 ## Compatibility Notes
 
 - Viewer and filtering code should rely on `manifest.json` plus motion `.npz`.

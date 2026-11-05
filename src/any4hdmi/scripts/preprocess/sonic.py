@@ -10,18 +10,17 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-try:
-    from mjhub import resolve_asset_reference
-except ImportError:
-    from mjhub import resolve_mjcf_reference as resolve_asset_reference
-
 from any4hdmi.core.format import MOTION_DTYPE, MOTIONS_SUBDIR, repo_root, save_motion, write_manifest
-from any4hdmi.core.model import G1_JOINT_ORDER, base_qpos_adr, joint_qpos_adrs, load_model
+from any4hdmi.core.model import G1_JOINT_ORDER, base_qpos_adr, joint_qpos_adrs
+from any4hdmi.scripts.preprocess.common import (
+    add_csv_arguments,
+    add_hf_mjcf_arguments,
+    load_conversion_model,
+    resolve_output_dir,
+    slice_frames,
+)
 from any4hdmi.utils.math import euler_to_quat_wxyz, maybe_degrees_to_radians
 from any4hdmi.utils.mjcf import (
-    DEFAULT_MJCF_PATH,
-    DEFAULT_MJCF_REPO_ID,
-    DEFAULT_MJCF_REVISION,
     build_hf_mjcf_reference,
     qpos_names_from_model,
 )
@@ -31,28 +30,13 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Convert g1_sonic CSV files into the any4hdmi qpos format."
     )
-    parser.add_argument(
-        "--csv-dir",
-        default=str(repo_root().parent / "g1_sonic" / "complete" / "g1" / "csv"),
-        help="Directory containing source CSV files.",
+    add_csv_arguments(
+        parser,
+        default_csv_dir=repo_root().parent / "g1_sonic" / "complete" / "g1" / "csv",
+        default_out_dir="output/sonic",
+        default_fps=120.0,
     )
-    parser.add_argument("--out-dir", default="output/sonic", help="Output dataset root for converted motions.")
-    parser.add_argument(
-        "--mjcf-repo",
-        default=DEFAULT_MJCF_REPO_ID,
-        help="Hugging Face repo id that stores the MJCF and mesh assets.",
-    )
-    parser.add_argument(
-        "--mjcf-path",
-        default=DEFAULT_MJCF_PATH,
-        help="Path to the MJCF file within --mjcf-repo.",
-    )
-    parser.add_argument(
-        "--mjcf-revision",
-        default=DEFAULT_MJCF_REVISION,
-        help="Revision passed to Hugging Face snapshot_download.",
-    )
-    parser.add_argument("--fps", type=float, default=120.0, help="Source frame rate.")
+    add_hf_mjcf_arguments(parser)
     parser.add_argument(
         "--translation-scale",
         type=float,
@@ -72,10 +56,6 @@ def _parse_args() -> argparse.Namespace:
         default="extrinsic",
         help="Whether root Euler angles are interpreted as intrinsic or extrinsic rotations.",
     )
-    parser.add_argument("--start", type=int, default=0, help="Start frame index.")
-    parser.add_argument("--end", type=int, default=-1, help="End frame index.")
-    parser.add_argument("--stride", type=int, default=1, help="Frame stride.")
-    parser.add_argument("--pattern", default="*.csv", help="Glob pattern relative to --csv-dir.")
     parser.add_argument(
         "--workers",
         type=int,
@@ -176,8 +156,7 @@ def _convert_one(
     stride: int,
 ) -> int:
     header, motion = _load_csv(csv_path)
-    resolved_end = end if end >= 0 else motion.shape[0]
-    motion = motion[start : min(resolved_end, motion.shape[0]) : max(1, stride)]
+    motion = slice_frames(motion, start, end, stride)
     qpos = _build_qpos_sequence(
         header,
         motion,
@@ -249,18 +228,14 @@ def main() -> None:
     if not csv_dir.is_dir():
         raise FileNotFoundError(f"CSV directory not found: {csv_dir}")
 
-    out_dir = Path(args.out_dir).expanduser()
-    if not out_dir.is_absolute():
-        out_dir = repo_root() / out_dir
-    out_dir = out_dir.resolve()
+    out_dir = resolve_output_dir(args.out_dir)
 
     mjcf_reference = build_hf_mjcf_reference(
         repo_id=args.mjcf_repo,
         path=args.mjcf_path,
         revision=args.mjcf_revision,
     )
-    mjcf_path = resolve_asset_reference(mjcf_reference)
-    model = load_model(mjcf_path)
+    model = load_conversion_model(mjcf_reference)
     qpos_names = qpos_names_from_model(model)
     model_qpos_dim = model.nq
     model_base_adr = base_qpos_adr(model)
