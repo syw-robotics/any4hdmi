@@ -64,6 +64,18 @@ The `.npz` stores:
 
 - `qpos`: `float32`, shape `[num_frames, nq]`
 
+## Source Datasets
+
+Clone the source datasets from Hugging Face:
+
+```bash
+git clone https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset data/LAFAN1_Retargeting_Dataset
+git clone https://huggingface.co/datasets/bones-studio/seed data/seed
+
+mkdir -p data/seed/g1
+tar xzf data/seed/g1.tar -C data/seed/g1
+```
+
 ## Dataset Conversion
 
 ### LAFAN
@@ -185,7 +197,9 @@ uv run any4hdmi-convert-sonic \
 
 ## Viewer Logic
 
-The viewer takes a single converted motion file:
+The viewer accepts a dataset root, a motion file, or a Hugging Face dataset URI.
+See the [viewer guide](viewer.md) for playback, trimming, diagnostics, and comparison.
+For example:
 
 ```bash
 uv run any4hdmi-view --motion output/sonic/motions/220705/Sideway_Walk_Right_001__A017.npz

@@ -154,6 +154,9 @@ class MotionEditingTest(unittest.TestCase):
 
         with mock.patch("viser.ViserServer", return_value=server), \
              mock.patch("any4hdmi.scripts.viewer._create_motion_scene"), \
+             mock.patch("any4hdmi.scripts.viewer.ContactHighlights"), \
+             mock.patch("any4hdmi.scripts.viewer.ComparisonView"), \
+             mock.patch("any4hdmi.scripts.viewer.IssueNavigator"), \
              mock.patch("any4hdmi.scripts.viewer.mujoco.mj_forward"), \
              mock.patch("any4hdmi.scripts.viewer.time.sleep") as sleep:
             # A function side_effect lets each playback iteration drive one UI action.

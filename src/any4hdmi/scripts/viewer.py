@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import time
+from bisect import bisect_left
+from functools import wraps
 from pathlib import Path
+from threading import RLock
 
 import mujoco
 from mjhub import temp_mjcf_with_floor
@@ -11,6 +14,9 @@ from tqdm import tqdm
 from any4hdmi.core.editing import export_motion_clip
 from any4hdmi.core.format import MOTIONS_SUBDIR, find_dataset_root, load_manifest, load_motion
 from any4hdmi.dataset.loading import resolve_input_paths
+from any4hdmi.scripts.viewer_contacts import ContactHighlights
+from any4hdmi.scripts.viewer_comparison import ComparisonView
+from any4hdmi.scripts.viewer_issues import IssueNavigator
 
 
 def _parse_args() -> argparse.Namespace:
@@ -42,6 +48,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--loop", action="store_true", help="Loop playback.")
     parser.add_argument("--headless", action="store_true", help="Run without opening a viewer window.")
     parser.add_argument("--port", type=int, default=8080, help="mjviser server port.")
+    parser.add_argument("--compare", default=None, help="Original dataset root or motion .npz; grounded datasets auto-discover their original through the manifest.")
     return parser.parse_args()
 
 
@@ -141,6 +148,7 @@ def _run_mjviser(
     frame_dt: float,
     loop: bool,
     port: int,
+    compare: Path | None = None,
 ) -> None:
     try:
         import viser
@@ -157,17 +165,36 @@ def _run_mjviser(
     scene = _create_motion_scene(server, model)
     scene.camera_tracking_enabled = True
     scene.create_scene_gui()
+    contact_highlights = ContactHighlights(server, model, data, scene)
+    comparison = ComparisonView(server, model, scene, contact_highlights, compare)
 
     state = {
         "label": None,
         "qpos": None,
         "frame_indices": [],
+        "playback_bounds": (0, 0),
         "playing": True,
         "cursor": 0,
         "pending_seek": None,
+        "pending_source_seek": None,
         "next_time": time.monotonic(),
         "speed": 1.0,
     }
+    state_lock = RLock()
+
+    def synchronized(callback):
+        @wraps(callback)
+        def call(*args, **kwargs):
+            with state_lock:
+                return callback(*args, **kwargs)
+        return call
+
+    def seek_source(frame: int) -> None:
+        state["pending_source_seek"] = frame
+        state["pending_seek"] = None
+        state["playing"] = False
+
+    issues = IssueNavigator(server, model, contact_highlights, seek_source, synchronize=synchronized)
 
     with server.gui.add_folder("Motions", order=0):
         motion_dropdown = server.gui.add_dropdown("Motion", labels, initial_value=initial_label, order=0)
@@ -182,7 +209,7 @@ def _run_mjviser(
         speed_slider = server.gui.add_slider("Speed", min=0.5, max=3.0, step=0.5, initial_value=1.0, order=3)
         source_frame = server.gui.add_number("Source frame (0-based)", initial_value=0, disabled=True, order=4)
 
-    with server.gui.add_folder("Trim motion", order=2, expand_by_default=False):
+    with server.gui.add_folder("Trim motion", order=5, expand_by_default=False):
         trim_start = server.gui.add_number("Start frame (inclusive)", initial_value=0, min=0, step=1)
         trim_end = server.gui.add_number("End frame (inclusive)", initial_value=0, min=0, step=1)
         set_start_button = server.gui.add_button("Set start to current frame")
@@ -206,10 +233,15 @@ def _run_mjviser(
         source_frame.value = frame_indices[cursor]
         _apply_qpos_frame(data, state["qpos"][frame_indices[cursor]])
         mujoco.mj_forward(model, data)
-        scene.update_from_mjdata(data)
+        with server.atomic():
+            scene.update_from_mjdata(data)
+            contact_highlights.update(force=True, frame=frame_indices[cursor])
+            comparison.update(frame_indices[cursor])
+        issues.set_frame(frame_indices[cursor], *state["playback_bounds"])
         if sync_slider:
             frame_slider.value = cursor
 
+    @synchronized
     def select_motion(label: str) -> None:
         if state["label"] == label:
             return
@@ -223,10 +255,15 @@ def _run_mjviser(
         state["label"] = label
         motion_dropdown.label = f"Motion ({labels.index(label) + 1}/{len(labels)})"
         state["qpos"] = qpos
+        contact_highlights.load_motion(qpos, load_manifest(find_dataset_root(motion_by_label[label])).timestep)
+        comparison.load(motion_by_label[label], qpos)
+        issues.load(qpos, comparison.qpos)
         state["frame_indices"] = frame_indices
+        state["playback_bounds"] = (frame_indices[0], min(end if end >= 0 else len(qpos), len(qpos)) - 1)
         state["cursor"] = 0
         state["playing"] = True
         state["pending_seek"] = None
+        state["pending_source_seek"] = None
         state["next_time"] = time.monotonic()
         trim_end.max = len(qpos) - 1
         trim_start.max = len(qpos) - 1
@@ -246,6 +283,7 @@ def _run_mjviser(
         select_motion(label)
 
     @motion_dropdown.on_update
+    @synchronized
     def _(_) -> None:
         show_motion(str(motion_dropdown.value))
 
@@ -254,13 +292,16 @@ def _run_mjviser(
         show_motion(labels[(index + delta) % len(labels)])
 
     @prev_button.on_click
+    @synchronized
     def _(_) -> None:
         shift_motion(-1)
 
     @next_button.on_click
+    @synchronized
     def _(_) -> None:
         shift_motion(1)
 
+    @synchronized
     def toggle_playback(_) -> None:
         should_play = not state["playing"]
         if should_play and state["cursor"] >= len(state["frame_indices"]) - 1 and not loop:
@@ -274,6 +315,7 @@ def _run_mjviser(
     server.gui.add_command("Start / Pause", hotkey="space").on_trigger(toggle_playback)
 
     @frame_slider.on_update
+    @synchronized
     def _(event) -> None:
         # Programmatic playback updates have no client; only user seeks pause.
         if event.client_id is None:
@@ -283,6 +325,7 @@ def _run_mjviser(
         update_indicator()
 
     @speed_slider.on_update
+    @synchronized
     def _(_) -> None:
         state["speed"] = float(speed_slider.value)
         if state["playing"]:
@@ -295,14 +338,17 @@ def _run_mjviser(
         return first, last
 
     @set_start_button.on_click
+    @synchronized
     def _(_) -> None:
         trim_start.value = state["frame_indices"][state["cursor"]]
 
     @set_end_button.on_click
+    @synchronized
     def _(_) -> None:
         trim_end.value = state["frame_indices"][state["cursor"]]
 
     @preview_button.on_click
+    @synchronized
     def _(_) -> None:
         try:
             first, last = selected_bounds()
@@ -310,6 +356,7 @@ def _run_mjviser(
             edit_status.value = str(exc)
             return
         state["frame_indices"] = list(range(first, last + 1, max(1, stride)))
+        state["playback_bounds"] = (first, last)
         state["pending_seek"] = None
         frame_slider.max = max(1, len(state["frame_indices"]) - 1)
         frame_slider.disabled = len(state["frame_indices"]) == 1
@@ -320,11 +367,13 @@ def _run_mjviser(
         edit_status.value = f"Previewing frames {first}..{last} ({last - first + 1} source frames)."
 
     @reset_button.on_click
+    @synchronized
     def _(_) -> None:
         trim_start.value = 0
         trim_end.value = len(state["qpos"]) - 1
         # Restore the full source timeline without changing the source motion.
         state["frame_indices"] = list(range(0, len(state["qpos"]), max(1, stride)))
+        state["playback_bounds"] = (0, len(state["qpos"]) - 1)
         state["pending_seek"] = None
         frame_slider.max = max(1, len(state["frame_indices"]) - 1)
         frame_slider.disabled = len(state["frame_indices"]) == 1
@@ -334,6 +383,7 @@ def _run_mjviser(
         edit_status.value = "Selection reset to the full motion."
 
     @export_button.on_click
+    @synchronized
     def _(_) -> None:
         try:
             first, last = selected_bounds()
@@ -353,24 +403,43 @@ def _run_mjviser(
     print("[any4hdmi-view] Open the URL in a browser. Press Ctrl+C to quit.")
 
     while True:
-        pending_seek = state["pending_seek"]
-        if pending_seek is not None:
-            state["pending_seek"] = None
-            apply_cursor(int(pending_seek), sync_slider=False)
-            state["next_time"] = time.monotonic() + effective_frame_dt()
+        # Viser callbacks run in worker threads. A clip and its comparison,
+        # indices and scan must change together between playback ticks.
+        with state_lock:
+            # Keep exact issue frames reachable even if --stride skipped them.
+            pending_source = state["pending_source_seek"]
+            if pending_source is not None:
+                state["pending_source_seek"] = None
+                indices = state["frame_indices"]
+                cursor = bisect_left(indices, pending_source)
+                if cursor == len(indices) or indices[cursor] != pending_source:
+                    indices.insert(cursor, pending_source)
+                frame_slider.max = max(1, len(indices) - 1)
+                apply_cursor(cursor, sync_slider=True)
+                update_indicator()
 
-        if state["playing"] and time.monotonic() >= state["next_time"]:
-            next_cursor = state["cursor"] + 1
-            if next_cursor >= len(state["frame_indices"]):
-                if loop:
-                    next_cursor = 0
-                else:
-                    next_cursor = len(state["frame_indices"]) - 1
-                    state["playing"] = False
-                    update_indicator()
-            apply_cursor(next_cursor, sync_slider=True)
-            state["next_time"] = time.monotonic() + effective_frame_dt()
+            pending_seek = state["pending_seek"]
+            if pending_seek is not None:
+                state["pending_seek"] = None
+                apply_cursor(int(pending_seek), sync_slider=False)
+                state["next_time"] = time.monotonic() + effective_frame_dt()
 
+            if state["playing"] and time.monotonic() >= state["next_time"]:
+                next_cursor = state["cursor"] + 1
+                if next_cursor >= len(state["frame_indices"]):
+                    if loop:
+                        next_cursor = 0
+                    else:
+                        next_cursor = len(state["frame_indices"]) - 1
+                        state["playing"] = False
+                        update_indicator()
+                apply_cursor(next_cursor, sync_slider=True)
+                state["next_time"] = time.monotonic() + effective_frame_dt()
+
+            with server.atomic():
+                contact_highlights.update()
+                comparison.update(state["frame_indices"][state["cursor"]])
+            issues.advance()
         time.sleep(min(0.01, max(effective_frame_dt() / 4.0, 0.001)))
 
 
@@ -411,6 +480,7 @@ def main() -> None:
         frame_dt=1.0 / fps,
         loop=args.loop,
         port=args.port,
+        compare=resolve_input_paths(Path.cwd(), args.compare)[0] if args.compare else None,
     )
 
 

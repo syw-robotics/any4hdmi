@@ -31,6 +31,7 @@ warp = [
 
 [project.scripts]
 any4hdmi-view = "any4hdmi.scripts.viewer:main"
+any4hdmi-ground = "any4hdmi.scripts.ground:main"
 any4hdmi-convert-lafan = "any4hdmi.scripts.preprocess.lafan:main"
 any4hdmi-convert-sonic = "any4hdmi.scripts.preprocess.sonic:main"
 any4hdmi-convert-axellwppr = "any4hdmi.scripts.preprocess.axellwppr:main"
