@@ -4,7 +4,7 @@ import mujoco
 import numpy as np
 
 from any4hdmi.core.grounding import DEFAULT_FOOT_BODIES, HEIGHT_TOLERANCE
-from any4hdmi.scripts.viewer_support import infer_support
+from any4hdmi.scripts.viewer.support import infer_support
 
 
 GROUND_COLOR = (255, 205, 40)
@@ -48,9 +48,10 @@ def self_collision_bodies(model: mujoco.MjModel, data: mujoco.MjData) -> set[int
 
 
 class ContactHighlights:
-    def __init__(self, server, model: mujoco.MjModel, data: mujoco.MjData, scene, *, controls=None, prefix="/contact_links") -> None:
+    def __init__(self, server, model: mujoco.MjModel, data: mujoco.MjData, scene, *, controls=None, prefix="/contact_links", live=False) -> None:
         self.server, self.model, self.data, self.scene = server, model, data, scene
         self.prefix = prefix
+        self.live = live
         self.dirty = True
         self.visibility = None
         self.offset = None
@@ -67,10 +68,11 @@ class ContactHighlights:
         self.floor_id = named_floor if named_floor in planes else int(planes[0]) if len(planes) else -1
         if controls is None:
             with server.gui.add_folder("Contacts", order=2):
-                self.ground = server.gui.add_checkbox("Stable foot support", initial_value=False, disabled=self.floor_id < 0)
-                self.scope = server.gui.add_dropdown("Penetration scan links", ("Feet", "All links"), initial_value="Feet")
+                self.ground = server.gui.add_checkbox("Feet near ground" if live else "Stable foot support", initial_value=False, disabled=self.floor_id < 0)
+                self.scope = None if live else server.gui.add_dropdown("Penetration scan links", ("Feet", "All links"), initial_value="Feet")
                 self.self_collision = server.gui.add_checkbox("Self collision", initial_value=False)
-                server.gui.add_markdown("🟡 Inferred stable foot support (not sliding) · 🔴 Self collision (takes priority)")
+                server.gui.add_markdown("🟡 Feet within 5 mm of the ground (pose estimate)" if live else "🟡 Inferred stable foot support (not sliding)")
+                server.gui.add_markdown("🔴 Self collision (takes priority)")
         else:
             self.ground, self.scope, self.self_collision = controls.ground, controls.scope, controls.self_collision
 
@@ -78,7 +80,8 @@ class ContactHighlights:
             self.dirty = True
 
         for control in (self.ground, self.scope, self.self_collision):
-            control.on_update(mark_dirty)
+            if control is not None:
+                control.on_update(mark_dirty)
 
     def load_motion(self, qpos: np.ndarray, timestep: float) -> None:
         self.support = infer_support(self.model, qpos, timestep, self.floor_id)
@@ -89,15 +92,19 @@ class ContactHighlights:
         if frame is not None and frame != self.frame:
             self.frame = frame
             self.dirty = True
-        visibility = tuple(self.scene.geom_groups_visible)
+        opacity = getattr(self.scene, "visual_opacity", 1.)
+        visibility = (tuple(self.scene.geom_groups_visible), opacity)
         offset = tuple(self.scene._scene_offset)
         if not force and not self.dirty and visibility == self.visibility and offset == self.offset:
             return
         self.dirty, self.visibility = False, visibility
         self.offset = offset
+        visibility = self.scene.geom_groups_visible
         colors = {}
         if self.ground.value and self.floor_id >= 0:
-            bodies = {body for body, mask in self.support.items() if mask[self.frame]}
+            bodies = ground_contact_bodies(self.model, self.data, self.floor_id, feet_only=True) if self.live else {
+                body for body, mask in self.support.items() if mask[self.frame]
+            }
             colors.update(dict.fromkeys(bodies, GROUND_COLOR))
         if self.self_collision.value:
             colors.update(dict.fromkeys(self_collision_bodies(self.model, self.data), SELF_COLOR))
@@ -119,6 +126,7 @@ class ContactHighlights:
                 )
             handle = self.handles[key]
             handle.color = colors[body]
+            handle.opacity = .6 if group == 1 else opacity
             handle.position = self.data.xpos[body] + self.scene._scene_offset
             handle.wxyz = self.data.xquat[body]
             handle.visible = True

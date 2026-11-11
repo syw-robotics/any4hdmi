@@ -11,7 +11,7 @@ import mujoco
 import numpy as np
 
 from any4hdmi.core.format import save_motion, write_manifest
-from any4hdmi.scripts.viewer_comparison import ComparisonView, load_comparison_motion
+from any4hdmi.scripts.viewer.comparison import ComparisonView, load_comparison_motion
 from any4hdmi.utils.mjcf import qpos_names_from_model
 
 
@@ -75,9 +75,10 @@ class ViewerComparisonTest(unittest.TestCase):
         data.qpos[:] = self.current[2]
         mujoco.mj_forward(self.model, data)
         scene = SimpleNamespace(_mesh_groups=[SimpleNamespace(body_ids=np.array([1]), group_id=0, handle=mock.Mock(glb_data=b'glb'))],
-                                _fixed_geom_handles={}, _scene_offset=np.array([0., 0, -.35]), geom_groups_visible=[True, False, True, False, False, False])
+                                _fixed_geom_handles={}, _scene_offset=np.array([0., 0, -.35]), geom_groups_visible=[True, False, True, False, False, False],
+                                appearance_revision=0, visual_opacity=.45)
         contacts = mock.Mock()
-        with mock.patch('any4hdmi.scripts.viewer_comparison.ContactHighlights'):
+        with mock.patch('any4hdmi.scripts.viewer.comparison.ContactHighlights'):
             comparison = ComparisonView(server, self.model, scene, contacts)
             comparison.load(self.path, self.current)
             comparison.update(2)
@@ -87,6 +88,12 @@ class ViewerComparisonTest(unittest.TestCase):
             self.assertGreater(abs(position[1]), 1)
             comparison.update(0)
             self.assertAlmostEqual(comparison.data.qpos[2], .1, places=6)
+            scene._mesh_groups[0].handle.glb_data = b'textured'
+            scene.appearance_revision += 1
+            scene.visual_opacity = 1.
+            comparison.update(0)  # Appearance changes while paused refresh both copies.
+            self.assertEqual(comparison._mesh_groups[0].handle.glb_data, b'textured')
+            self.assertEqual(comparison.visual_opacity, 1.)
             comparison.enabled.value = False
             comparison.update(0)
             self.assertFalse(comparison._mesh_groups[0].handle.visible)

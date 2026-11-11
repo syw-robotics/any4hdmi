@@ -5,7 +5,7 @@ import unittest
 import mujoco
 import numpy as np
 
-from any4hdmi.scripts.viewer_support import infer_support, stable_support_mask
+from any4hdmi.scripts.viewer.support import infer_support, stable_support_mask
 
 
 FOOT_XML = '''<mujoco><worldbody>

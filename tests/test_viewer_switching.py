@@ -11,8 +11,8 @@ import mujoco
 import numpy as np
 
 from any4hdmi.core.format import save_motion, write_manifest
-from any4hdmi.scripts.viewer import _run_mjviser
-from any4hdmi.scripts.viewer_comparison import ComparisonView
+from any4hdmi.scripts.viewer.app import _run_mjviser
+from any4hdmi.scripts.viewer.comparison import ComparisonView
 from any4hdmi.utils.mjcf import qpos_names_from_model
 
 
@@ -77,12 +77,12 @@ class ViewerSwitchingTest(unittest.TestCase):
 
             try:
                 with mock.patch('viser.ViserServer', return_value=server), \
-                     mock.patch('any4hdmi.scripts.viewer._create_motion_scene', return_value=scene), \
-                     mock.patch('any4hdmi.scripts.viewer.ContactHighlights'), \
-                     mock.patch('any4hdmi.scripts.viewer_comparison.ContactHighlights'), \
-                     mock.patch('any4hdmi.scripts.viewer.IssueNavigator'), \
+                     mock.patch('any4hdmi.scripts.viewer.app._create_motion_scene', return_value=scene), \
+                     mock.patch('any4hdmi.scripts.viewer.app.ContactHighlights'), \
+                     mock.patch('any4hdmi.scripts.viewer.comparison.ContactHighlights'), \
+                     mock.patch('any4hdmi.scripts.viewer.app.IssueNavigator'), \
                      mock.patch.object(ComparisonView, 'load', blocked_load), \
-                     mock.patch('any4hdmi.scripts.viewer.time.sleep', side_effect=interact):
+                     mock.patch('any4hdmi.scripts.viewer.app.time.sleep', side_effect=interact):
                     with self.assertRaises(StopIteration):
                         _run_mjviser(model, mujoco.MjData(model), [(name, root / 'corrected/motions' / name) for name in ('long.npz', 'short.npz')],
                                      'long.npz', start=0, end=-1, stride=1, frame_dt=1000, loop=False, port=8080)

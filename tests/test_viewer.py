@@ -11,7 +11,7 @@ import numpy as np
 import trimesh
 
 from any4hdmi.core.format import find_dataset_root, load_manifest
-from any4hdmi.scripts.viewer import _create_motion_scene, _resolve_motion_path, dataset_motions, initial_motion_label
+from any4hdmi.scripts.viewer.app import _create_motion_scene, _resolve_motion_path, dataset_motions, initial_motion_label
 
 
 class ViewerTest(unittest.TestCase):
@@ -33,24 +33,44 @@ class ViewerTest(unittest.TestCase):
         original_contype = model.geom_contype.copy()
         original_conaffinity = model.geom_conaffinity.copy()
         server = mock.MagicMock()
+        originals = {}
 
         def add_mesh(name, mesh, **kwargs):
-            return mock.Mock(glb_data=mesh.export(file_type="glb"), **kwargs)
+            handle = mock.Mock(glb_data=mesh.export(file_type="glb"), **kwargs)
+            originals[id(handle)] = handle.glb_data
+            return handle
 
         server.scene.add_mesh_trimesh.side_effect = add_mesh
         server.scene.add_batched_meshes_trimesh.side_effect = add_mesh
         checkboxes = {}
 
-        def add_checkbox(label, initial_value):
+        def add_checkbox(label, *args, initial_value, **kwargs):
             checkboxes[label] = mock.Mock(value=initial_value)
             return checkboxes[label]
 
-        server.gui.add_checkbox.side_effect = add_checkbox
+        for method in ("add_checkbox", "add_dropdown", "add_rgb", "add_slider"):
+            getattr(server.gui, method).side_effect = add_checkbox
         scene = _create_motion_scene(server, model)
         scene.camera_tracking_enabled = False
         data = mujoco.MjData(model)
         mujoco.mj_forward(model, data)
         scene.update_from_mjdata(data)
+
+        visual_handle = next(group.handle for group in scene._mesh_groups if group.group_id == 0)
+        ghost = visual_handle.glb_data
+        self.assertEqual(checkboxes["Appearance"].value, "Ghost")
+        self.assertEqual(scene.visual_opacity, .45)
+        meshes = trimesh.load(io.BytesIO(ghost), file_type="glb", force="scene")
+        for mesh in meshes.geometry.values():
+            self.assertEqual(mesh.visual.material.alphaMode, "BLEND")
+            np.testing.assert_array_equal(mesh.visual.material.baseColorFactor, [38, 166, 255, 115])
+        checkboxes["Appearance"].value = "Texture"
+        checkboxes["Appearance"].on_update.call_args.args[0](None)
+        self.assertEqual(visual_handle.glb_data, originals[id(visual_handle)])
+        self.assertEqual(scene.visual_opacity, 1.)
+        checkboxes["Appearance"].value = "Ghost"
+        checkboxes["Appearance"].on_update.call_args.args[0](None)
+        self.assertEqual(visual_handle.glb_data, ghost)
 
         np.testing.assert_array_equal(model.geom_group, [2, 2, 0, 1, 1, 1])
         np.testing.assert_array_equal(model.geom_contype, original_contype)
@@ -87,7 +107,7 @@ class ViewerTest(unittest.TestCase):
               <body><freejoint/><geom type="sphere" size=".1"/></body>
             </worldbody></mujoco>
         ''')
-        with mock.patch("mjviser.ViserMujocoScene"):
+        with mock.patch("any4hdmi.scripts.viewer.scene.ViserMujocoScene"):
             scene = _create_motion_scene(mock.MagicMock(), model)
         self.assertEqual(scene.geom_groups_visible, [False, True, True, False, False, False])
 
@@ -96,7 +116,7 @@ class ViewerTest(unittest.TestCase):
         motion_uri = "hf://example/dataset/motions/example.npz"
 
         with mock.patch(
-            "any4hdmi.scripts.viewer.resolve_input_paths",
+            "any4hdmi.scripts.viewer.app.resolve_input_paths",
             return_value=[expected],
         ) as resolve_input_paths:
             resolved = _resolve_motion_path(motion_uri)

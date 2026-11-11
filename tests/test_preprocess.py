@@ -91,7 +91,7 @@ class PreprocessConversionTest(unittest.TestCase):
         expected = self.expected_qpos(positions, [[1, 0, 0, 0], [0, 0, 0, 1]], joints)
         np.testing.assert_array_equal(actual, expected)
 
-    def test_csv_commands_write_dataset_and_announce_model_before_fetch(self) -> None:
+    def test_csv_commands_write_dataset_and_announce_local_model(self) -> None:
         positions = np.arange(12, dtype=np.float32).reshape(4, 3)
         joints = np.zeros((4, 29), dtype=np.float32)
         quaternions = np.tile([1, 0, 0, 0], (4, 1))
@@ -117,9 +117,7 @@ class PreprocessConversionTest(unittest.TestCase):
                 output = io.StringIO()
 
                 def resolve_model(reference):
-                    self.assertIn(reference, output.getvalue())
-                    self.assertIn("models and mesh assets", output.getvalue())
-                    self.assertIn("reuses local cache", output.getvalue())
+                    self.assertEqual(reference, "hf://elijahgalahad/g1_xmls@main/g1-mode_13_15.xml")
                     return model_path
 
                 argv = [
@@ -130,6 +128,8 @@ class PreprocessConversionTest(unittest.TestCase):
                 with patch("sys.argv", argv), redirect_stdout(output), \
                      patch.object(common, "resolve_mjcf_path", side_effect=resolve_model):
                     module.main()
+                self.assertIn(f"Loading local robot MJCF: {model_path}", output.getvalue())
+                self.assertNotIn("Fetching", output.getvalue())
                 actual = load_motion(root / "output/motions/group/clip.npz")
                 np.testing.assert_allclose(actual, expected, atol=1e-6)
                 manifest = load_manifest(root / "output")

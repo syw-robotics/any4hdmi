@@ -7,7 +7,7 @@ import mujoco
 import numpy as np
 
 from any4hdmi.core.format import MOTIONS_SUBDIR, find_dataset_root, load_manifest, load_motion
-from any4hdmi.scripts.viewer_contacts import ContactHighlights
+from any4hdmi.scripts.viewer.contacts import ContactHighlights
 
 
 def load_comparison_motion(current_path: Path, current_qpos: np.ndarray, reference: Path | None = None) -> tuple[np.ndarray | None, str]:
@@ -15,7 +15,7 @@ def load_comparison_motion(current_path: Path, current_qpos: np.ndarray, referen
         current_manifest = load_manifest(find_dataset_root(current_path))
         if reference is None:
             source = current_manifest.payload.get("source", {})
-            if "foot_grounding" not in source or not source.get("dataset"):
+            if not ({"foot_grounding", "repair"} & source.keys()) or not source.get("dataset"):
                 return None, "Use --compare <original dataset or motion> to compare."
             reference = Path(source["dataset"])
         reference = reference.expanduser().absolute()
@@ -66,14 +66,22 @@ class ComparisonView:
     def geom_groups_visible(self):
         return self.scene.geom_groups_visible
 
+    @property
+    def visual_opacity(self):
+        return getattr(self.scene, "visual_opacity", 1.)
+
     def load(self, path: Path, qpos: np.ndarray) -> None:
+        reference, message = load_comparison_motion(path, qpos, self.reference)
+        timestep = load_manifest(find_dataset_root(path)).timestep if reference is not None else 0.
+        self.set_motion(qpos, reference, timestep, message)
+
+    def set_motion(self, qpos, reference, timestep, message) -> None:
         self.last_key = None
-        self.current_qpos = qpos
-        self.qpos, message = load_comparison_motion(path, qpos, self.reference)
+        self.current_qpos, self.qpos = qpos, reference
         self.status.value = message
         self.enabled.disabled = self.qpos is None
         if self.qpos is not None:
-            self.contacts.load_motion(self.qpos, load_manifest(find_dataset_root(path)).timestep)
+            self.contacts.load_motion(self.qpos, timestep)
         if self.qpos is not None and not self._mesh_groups:
             for index, group in enumerate(self.scene._mesh_groups):
                 handle = self.server.scene.add_batched_glb(
@@ -86,6 +94,7 @@ class ComparisonView:
     def update(self, frame: int) -> None:
         visible = self.qpos is not None and bool(self.enabled.value)
         key = (frame, visible, tuple(self.geom_groups_visible), tuple(self.scene._scene_offset),
+               getattr(self.scene, "appearance_revision", 0),
                bool(self.contacts.ground.value), self.contacts.scope.value, bool(self.contacts.self_collision.value))
         if key == self.last_key:
             return
@@ -100,7 +109,8 @@ class ComparisonView:
         self.data.qpos[:] = self.qpos[frame]
         mujoco.mj_forward(self.model, self.data)
         self._scene_offset = self.scene._scene_offset + np.array([0., 1.4, 0.])
-        for group in self._mesh_groups:
+        for source, group in zip(self.scene._mesh_groups, self._mesh_groups):
+            group.handle.glb_data = source.handle.glb_data
             group.handle.visible = bool(self.geom_groups_visible[group.group_id])
             group.handle.batched_positions = self.data.xpos[group.body_ids] + self._scene_offset
             group.handle.batched_wxyzs = self.data.xquat[group.body_ids]

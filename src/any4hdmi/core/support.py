@@ -37,10 +37,8 @@ def stable_support_mask(points: np.ndarray, timestep: float) -> np.ndarray:
     return result
 
 
-def infer_support(model: mujoco.MjModel, qpos: np.ndarray, timestep: float, floor_id: int) -> dict[int, np.ndarray]:
-    """Full-source-clip masks for G1 feet and descendants; never modify qpos."""
-    if floor_id < 0:
-        return {}
+def sole_samples(model: mujoco.MjModel) -> tuple[dict, dict]:
+    """Fixed heel/forefoot surface samples and their foot-body groups."""
     from mjviser.conversions import merge_geoms
 
     feet = {}
@@ -67,6 +65,14 @@ def infer_support(model: mujoco.MjModel, qpos: np.ndarray, timestep: float, floo
             corners = np.array([[x, y] for x in (low[0], high[0]) for y in (low[1], high[1])])
             indices = np.unique(np.argmin(np.linalg.norm(sole[:, None, :2] - corners, axis=-1), axis=0))
             samples[body] = sole[indices]
+    return feet, samples
+
+
+def infer_support(model: mujoco.MjModel, qpos: np.ndarray, timestep: float, floor_id: int) -> dict[int, np.ndarray]:
+    """Full-source-clip masks for G1 feet and descendants; never modify qpos."""
+    if floor_id < 0:
+        return {}
+    feet, samples = sole_samples(model)
     if not samples:
         return {}
     trajectories = {body: np.empty((len(qpos), len(points), 3)) for body, points in samples.items()}

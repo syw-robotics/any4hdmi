@@ -7,7 +7,7 @@ from unittest import mock
 import mujoco
 import numpy as np
 
-from any4hdmi.scripts.viewer_contacts import ContactHighlights, GROUND_COLOR, SELF_COLOR, ground_contact_bodies, self_collision_bodies
+from any4hdmi.scripts.viewer.contacts import ContactHighlights, GROUND_COLOR, SELF_COLOR, ground_contact_bodies, self_collision_bodies
 
 
 MODEL_XML = '''

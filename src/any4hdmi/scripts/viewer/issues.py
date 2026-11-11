@@ -5,7 +5,7 @@ from bisect import bisect_left, bisect_right
 import mujoco
 import numpy as np
 
-from any4hdmi.scripts.viewer_contacts import ground_link_distances, self_collision_bodies
+from any4hdmi.scripts.viewer.contacts import ground_link_distances, self_collision_bodies
 
 
 def issue_intervals(mask: np.ndarray) -> list[tuple[int, int]]:

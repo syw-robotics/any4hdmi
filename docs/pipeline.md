@@ -10,7 +10,7 @@ For runtime dataset loading and FK cache behavior, see [`dataset.md`](./dataset.
 `any4hdmi` normalizes different source datasets into one MuJoCo-friendly representation:
 
 - one dataset-level `manifest.json`
-- one Hugging Face MJCF reference per dataset
+- one MJCF model reference per dataset
 - one motion file per clip under `output/<dataset>/motions/**/*.npz`
 
 The core motion payload is only:
@@ -38,7 +38,10 @@ any4hdmi/
   src/any4hdmi/
 ```
 
-This repo does not keep a checked-in `assets/` tree. MJCF XML and STL meshes are resolved from Hugging Face cache on demand.
+G1 MJCF XML and their referenced STL meshes are bundled under
+`src/any4hdmi/assets/g1/`, including source provenance and upstream license notes.
+Model resolution is local-only: it never calls Hugging Face to check or download
+model files. Other models must be provided as local XML files with their assets.
 
 Default MJCF reference:
 
@@ -46,12 +49,17 @@ Default MJCF reference:
 - path: `g1-mode_13_15.xml`
 - revision: `main`
 
+This legacy reference identifies the bundled G1 model; it does not trigger a
+download. The bundled snapshot is pinned to
+`dfa690ab283816a180f66ce892541ad99bf81d7d`; that exact revision is also accepted.
+Other repositories, revisions, or unbundled model files require a local XML path.
+
 ## Unified Motion Format
 
 Each converted dataset root contains a `manifest.json` with dataset-level information:
 
 - dataset name
-- Hugging Face MJCF reference
+- MJCF model reference (bundled G1 identifier or local XML path)
 - timestep
 - qpos dimension
 - qpos names
@@ -96,7 +104,7 @@ Default conversion settings:
 
 Pipeline:
 
-1. Resolve the MJCF repo snapshot into the Hugging Face cache.
+1. Resolve the model identifier to bundled local XML and mesh assets.
 2. Read each CSV into `float32`.
 3. Slice frames with `start/end/stride`.
 4. Reorder root quaternion from `xyzw` to MuJoCo `wxyz`.
@@ -125,7 +133,7 @@ Default conversion settings:
 
 Pipeline:
 
-1. Resolve the MJCF repo snapshot into the Hugging Face cache.
+1. Resolve the model identifier to bundled local XML and mesh assets.
 2. Read each CSV into `float32`.
 3. Parse source columns by header name.
 4. Convert root translation from centimeters to meters.
@@ -208,14 +216,14 @@ uv run any4hdmi-view --motion output/sonic/motions/220705/Sideway_Walk_Right_001
 Viewer steps:
 
 1. Find the nearest dataset `manifest.json`.
-2. Resolve the referenced MJCF repo snapshot from Hugging Face cache.
+2. Resolve the model reference to bundled G1 assets or a local XML path.
 3. Load the referenced MJCF.
 4. Inject viewer-only XML for:
    - skybox
    - checker groundplane material
    - ground light
    - floor plane
-5. Build a temporary MJCF next to the cached source XML so relative mesh paths still work.
+5. Build a temporary MJCF next to the local source XML so relative mesh paths still work.
 6. Load the motion `qpos`.
 7. For each frame:
    - assign `data.qpos[:]`
@@ -259,14 +267,14 @@ uv run any4hdmi-convert-axellwppr \
   --out-dir output/100style
 ```
 
-Override the MJCF reference:
+Choose another bundled G1 XML:
 
 ```bash
 uv run any4hdmi-convert-lafan \
   --csv-dir ../lafan-process/LAFAN1_Retargeting_Dataset/g1 \
   --out-dir output/lafan \
   --mjcf-repo elijahgalahad/g1_xmls \
-  --mjcf-path g1-mode_13_15.xml \
+  --mjcf-path g1-mode_5_11.xml \
   --mjcf-revision main
 ```
 
@@ -274,14 +282,6 @@ Replay a motion:
 
 ```bash
 uv run any4hdmi-view --motion output/lafan/motions/dance1_subject2.npz
-```
-
-Replay headless:
-
-```bash
-uv run any4hdmi-view \
-  --motion output/sonic/motions/220705/Sideway_Walk_Right_001__A017.npz \
-  --headless
 ```
 
 Filter a converted dataset with FK checks:
@@ -296,5 +296,5 @@ uv run any4hdmi-filter-dataset \
 
 - Converted `qpos` is saved as `float32`.
 - Viewer loads motion as `float32` and assigns it into MuJoCo runtime state per frame.
-- Existing output folders generated with older local-path manifests should be reconverted or have their manifests rewritten to Hugging Face MJCF references.
+- Existing local-path manifests remain supported; no reconversion is needed if the XML and its assets are available.
 - The dataset filter reconstructs `qvel` from adjacent `qpos` frames and runs FK with `mujoco_warp` when available, otherwise it falls back to CPU MuJoCo.

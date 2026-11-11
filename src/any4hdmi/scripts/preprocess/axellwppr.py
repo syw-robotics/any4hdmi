@@ -87,7 +87,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mjcf",
         default=DEFAULT_MJCF,
-        help="Local MJCF/XML path or hf:// reference.",
+        help="Local MJCF/XML path or bundled G1 model reference; no model downloads.",
     )
     return parser.parse_args()
 

@@ -16,6 +16,7 @@ dependencies = [
     "numpy",
     "pandas",
     "scikit-learn",
+    "scipy",
     "tensordict",
     "torch",
     "tqdm",
@@ -31,7 +32,9 @@ warp = [
 
 [project.scripts]
 any4hdmi-view = "any4hdmi.scripts.viewer:main"
+any4hdmi-select = "any4hdmi.scripts.select:main"
 any4hdmi-ground = "any4hdmi.scripts.ground:main"
+any4hdmi-repair = "any4hdmi.scripts.repair:main"
 any4hdmi-convert-lafan = "any4hdmi.scripts.preprocess.lafan:main"
 any4hdmi-convert-sonic = "any4hdmi.scripts.preprocess.sonic:main"
 any4hdmi-convert-axellwppr = "any4hdmi.scripts.preprocess.axellwppr:main"
@@ -48,3 +51,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+any4hdmi = ["assets/g1/*.xml", "assets/g1/*.json", "assets/g1/*.md", "assets/g1/meshes/*.STL"]

@@ -5,7 +5,7 @@ import unittest
 import mujoco
 import numpy as np
 
-from any4hdmi.scripts.viewer_issues import MotionIssueScan, issue_intervals, next_issue_frame, timeline_image
+from any4hdmi.scripts.viewer.issues import MotionIssueScan, issue_intervals, next_issue_frame, timeline_image
 
 
 class ViewerIssuesTest(unittest.TestCase):

@@ -4,16 +4,12 @@ from pathlib import Path
 
 import mujoco
 
-try:
-    from mjhub import resolve_asset_reference as _resolve_asset_reference
-except ImportError:
-    from mjhub import resolve_mjcf_reference as _resolve_asset_reference
-
-
 DEFAULT_BASE_JOINT_NAME = "floating_base_joint"
 DEFAULT_MJCF_REPO_ID = "elijahgalahad/g1_xmls"
 DEFAULT_MJCF_PATH = "g1-mode_13_15.xml"
 DEFAULT_MJCF_REVISION = "main"
+BUNDLED_MJCF_REVISION = "dfa690ab283816a180f66ce892541ad99bf81d7d"
+BUNDLED_MJCF_DIR = Path(__file__).resolve().parents[1] / "assets" / "g1"
 MjcfInput = str | Path
 
 
@@ -30,7 +26,21 @@ def resolve_mjcf_path(mjcf: MjcfInput, *, dataset_root: str | Path | None = None
     normalized = normalize_mjcf_reference(mjcf, dataset_root=dataset_root)
     if isinstance(normalized, Path):
         return normalized
-    return _resolve_asset_reference(normalized)
+    # Existing manifests use these references as stable model identifiers.
+    prefixes = (
+        f"hf://{DEFAULT_MJCF_REPO_ID}/",
+        f"hf://{DEFAULT_MJCF_REPO_ID}@{DEFAULT_MJCF_REVISION}/",
+        f"hf://{DEFAULT_MJCF_REPO_ID}@{BUNDLED_MJCF_REVISION}/",
+    )
+    for prefix in prefixes:
+        if normalized.startswith(prefix):
+            path = (BUNDLED_MJCF_DIR / normalized[len(prefix):]).resolve()
+            if path.parent == BUNDLED_MJCF_DIR and path.suffix == ".xml" and path.is_file():
+                return path
+    raise FileNotFoundError(
+        f"Model assets are local-only. No bundled model matches {normalized!r}; "
+        "provide a local XML path with its mesh assets."
+    )
 
 
 def normalize_mjcf_reference(

@@ -10,7 +10,7 @@ import numpy as np
 
 from any4hdmi.core.editing import export_motion_clip
 from any4hdmi.core.format import load_manifest, load_motion, save_motion
-from any4hdmi.scripts.viewer import _run_mjviser, dataset_motions
+from any4hdmi.scripts.viewer.app import _run_mjviser, dataset_motions
 
 
 class MotionEditingTest(unittest.TestCase):
@@ -153,12 +153,12 @@ class MotionEditingTest(unittest.TestCase):
             raise StopIteration
 
         with mock.patch("viser.ViserServer", return_value=server), \
-             mock.patch("any4hdmi.scripts.viewer._create_motion_scene"), \
-             mock.patch("any4hdmi.scripts.viewer.ContactHighlights"), \
-             mock.patch("any4hdmi.scripts.viewer.ComparisonView"), \
-             mock.patch("any4hdmi.scripts.viewer.IssueNavigator"), \
-             mock.patch("any4hdmi.scripts.viewer.mujoco.mj_forward"), \
-             mock.patch("any4hdmi.scripts.viewer.time.sleep") as sleep:
+             mock.patch("any4hdmi.scripts.viewer.app._create_motion_scene"), \
+             mock.patch("any4hdmi.scripts.viewer.app.ContactHighlights"), \
+             mock.patch("any4hdmi.scripts.viewer.app.ComparisonView"), \
+             mock.patch("any4hdmi.scripts.viewer.app.IssueNavigator"), \
+             mock.patch("any4hdmi.scripts.viewer.app.mujoco.mj_forward"), \
+             mock.patch("any4hdmi.scripts.viewer.app.time.sleep") as sleep:
             # A function side_effect lets each playback iteration drive one UI action.
             actions = iter([interact, edit])
             sleep.side_effect = lambda delay: next(actions)(delay)

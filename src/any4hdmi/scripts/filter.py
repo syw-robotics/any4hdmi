@@ -15,13 +15,9 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from tqdm import tqdm
 
-try:
-    from mjhub import resolve_asset_reference
-except ImportError:
-    from mjhub import resolve_mjcf_reference as resolve_asset_reference
-
 from any4hdmi.core.format import ensure_dir, load_manifest, write_manifest
 from any4hdmi.fk.runner import FKRunner
+from any4hdmi.utils.mjcf import resolve_mjcf_path
 from any4hdmi.utils.dataset import (
     DEFAULT_MOTION_LOADER_NUM_WORKERS,
     DEFAULT_MOTION_LOADER_PREFETCH_FACTOR,
@@ -84,8 +80,8 @@ def _parse_args() -> argparse.Namespace:
         "--mjcf-path",
         default=None,
         help=(
-            "Optional MJCF override. Defaults to the manifest.json mjcf reference resolved via mjhub. "
-            "Accepts either a local XML path or an hf://... MJCF reference."
+            "Optional MJCF override. Defaults to the manifest.json model resolved locally. "
+            "Accepts a local XML path or a bundled G1 model reference."
         ),
     )
     parser.add_argument(
@@ -193,7 +189,7 @@ def _resolve_output_root(input_root: Path, output_root_arg: str | None) -> Path:
 def _resolve_mjcf_path(_manifest_root: Path, manifest: Any, mjcf_override: str | None) -> Path:
     if mjcf_override:
         if mjcf_override.startswith("hf://"):
-            return resolve_asset_reference(mjcf_override, local_root=manifest.root)
+            return resolve_mjcf_path(mjcf_override, dataset_root=manifest.root)
         mjcf_path = Path(mjcf_override).expanduser().resolve()
         if mjcf_path.is_file():
             return mjcf_path

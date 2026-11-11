@@ -1,0 +1,25 @@
+{
+  "source": "https://huggingface.co/elijahgalahad/g1_xmls",
+  "source_revision": "1c1d082f299126b9272e81c04121ff347c97fa8f",
+  "models": "Existing MJCF and meshes unchanged",
+  "generated_urdf": "urdf/g1-mode_{13_15,5_11}.urdf",
+  "fixed_marker_mass_kg": 1e-08,
+  "marker_note": "Tiny inertials retain zero-mass toe/palm/IMU landmarks as fixed PhysX links; MJCF stays unchanged.",
+  "generator_sha256": "653ec09eece7da266fd8e52974dfed6f02fcb6dd15b1d3737ae6bf3730681169",
+  "validation": {
+    "g1": {
+      "position_error": 6.494804694057166e-14,
+      "orientation_error": 3.190051834533367e-13,
+      "mass_error": 1e-08,
+      "nq": 36,
+      "joints": 29
+    },
+    "g1_mode5": {
+      "position_error": 6.486478021372477e-14,
+      "orientation_error": 3.190051834533367e-13,
+      "mass_error": 1e-08,
+      "nq": 36,
+      "joints": 29
+    }
+  }
+}

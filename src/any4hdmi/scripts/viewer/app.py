@@ -9,14 +9,15 @@ from threading import RLock
 
 import mujoco
 from mjhub import temp_mjcf_with_floor
-from tqdm import tqdm
 
 from any4hdmi.core.editing import export_motion_clip
 from any4hdmi.core.format import MOTIONS_SUBDIR, find_dataset_root, load_manifest, load_motion
 from any4hdmi.dataset.loading import resolve_input_paths
-from any4hdmi.scripts.viewer_contacts import ContactHighlights
-from any4hdmi.scripts.viewer_comparison import ComparisonView
-from any4hdmi.scripts.viewer_issues import IssueNavigator
+from any4hdmi.scripts.viewer.scene import create_motion_scene as _create_motion_scene
+from any4hdmi.scripts.viewer.contacts import ContactHighlights
+from any4hdmi.scripts.viewer.comparison import ComparisonView
+from any4hdmi.scripts.viewer.issues import IssueNavigator
+from any4hdmi.scripts.repair.panel import RepairPanel
 
 
 def _parse_args() -> argparse.Namespace:
@@ -46,7 +47,6 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--stride", type=int, default=1, help="Frame stride.")
     parser.add_argument("--loop", action="store_true", help="Loop playback.")
-    parser.add_argument("--headless", action="store_true", help="Run without opening a viewer window.")
     parser.add_argument("--port", type=int, default=8080, help="mjviser server port.")
     parser.add_argument("--compare", default=None, help="Original dataset root or motion .npz; grounded datasets auto-discover their original through the manifest.")
     return parser.parse_args()
@@ -84,56 +84,6 @@ def initial_motion_label(motion_path: Path, motions: list[tuple[str, Path]]) -> 
         if path.absolute() in wanted or path.resolve() in wanted:
             return label
     raise FileNotFoundError(f"Motion file is not part of the dataset: {motion_path}")
-
-
-def _create_motion_scene(server, model: mujoco.MjModel):
-    import io
-
-    import trimesh
-    from mjviser import ViserMujocoScene
-
-    # Model vendors use different geom groups. Keep world geometry separate
-    # and classify robot geoms by their actual MuJoCo collision flags.
-    robot = (model.geom_bodyid != 0) & (model.geom_type != mujoco.mjtGeom.mjGEOM_PLANE)
-    collision = robot & ((model.geom_contype != 0) | (model.geom_conaffinity != 0))
-    visual = robot & ~collision
-    model.geom_group[:] = 2
-    model.geom_group[visual] = 0
-    model.geom_group[collision] = 1
-    model.geom_matid[collision] = -1
-    model.geom_rgba[collision] = (40 / 255, 200 / 255, 90 / 255, 120 / 255)
-
-    scene = ViserMujocoScene(server, model, num_envs=1)
-    # As in LocoLab, add a BLEND material: vertex alpha alone is not enough
-    # for mjviser's exported collision meshes to render transparently.
-    handles = [group.handle for group in scene._mesh_groups if group.group_id == 1]
-    handles += [handle for (_, group, _), handle in scene._fixed_geom_handles.items() if group == 1]
-    for handle in handles:
-        meshes = trimesh.load(io.BytesIO(handle.glb_data), file_type="glb", force="scene")
-        for mesh in meshes.geometry.values():
-            material = trimesh.visual.material.PBRMaterial(
-                baseColorFactor=mesh.visual.vertex_colors[0], alphaMode="BLEND", doubleSided=True
-            )
-            mesh.visual = trimesh.visual.TextureVisuals(material=material)
-        handle.glb_data = meshes.export(file_type="glb")
-
-    has_visual = bool(visual.any())
-    scene.geom_groups_visible = [has_visual, not has_visual and bool(collision.any()), True, False, False, False]
-    scene._sync_visibilities()
-    with server.gui.add_folder("Robot"):
-        visual_checkbox = server.gui.add_checkbox("Visual", initial_value=scene.geom_groups_visible[0])
-        collision_checkbox = server.gui.add_checkbox("Collision", initial_value=scene.geom_groups_visible[1])
-
-        def update_layers(_) -> None:
-            scene.geom_groups_visible[0] = bool(visual_checkbox.value)
-            scene.geom_groups_visible[1] = bool(collision_checkbox.value)
-            scene._sync_visibilities()
-            scene.refresh_visualization()
-
-        visual_checkbox.on_update(update_layers)
-        collision_checkbox.on_update(update_layers)
-
-    return scene
 
 
 def _run_mjviser(
@@ -255,6 +205,7 @@ def _run_mjviser(
         state["label"] = label
         motion_dropdown.label = f"Motion ({labels.index(label) + 1}/{len(labels)})"
         state["qpos"] = qpos
+        export_button.disabled = False
         contact_highlights.load_motion(qpos, load_manifest(find_dataset_root(motion_by_label[label])).timestep)
         comparison.load(motion_by_label[label], qpos)
         issues.load(qpos, comparison.qpos)
@@ -397,50 +348,78 @@ def _run_mjviser(
             return
         edit_status.value = f"Saved {last - first + 1} frames to {output_path}"
 
+    def show_repair(path, candidate, original) -> None:
+        label = next(name for name, motion in motion_by_label.items() if motion.absolute() == path.absolute())
+        if candidate is None:
+            state["label"] = None
+            show_motion(label)
+            return
+        show_motion(label)
+        timestep = load_manifest(find_dataset_root(path)).timestep
+        state["qpos"] = candidate
+        state["playing"] = False
+        state["pending_seek"] = state["pending_source_seek"] = None
+        contact_highlights.load_motion(candidate, timestep)
+        comparison.set_motion(candidate, original, timestep, f"Repair input: {path}")
+        issues.load(candidate, original)
+        issues.requested = True
+        export_button.disabled = True
+        edit_status.value = "Repair preview: use Repair export to save this result."
+        update_indicator()
+        apply_cursor(state["cursor"], sync_slider=True)
+
     show_motion(initial_label)
+    repair = RepairPanel(server, motion_by_label, lambda: state["label"], show_repair, synchronize=synchronized)
+    last_repair_poll = 0.
     print(f"[any4hdmi-view] {len(labels)} motions. Use the Motion dropdown, Previous, or Next.")
     print(f"[any4hdmi-view] mjviser server: http://localhost:{port}")
     print("[any4hdmi-view] Open the URL in a browser. Press Ctrl+C to quit.")
 
-    while True:
-        # Viser callbacks run in worker threads. A clip and its comparison,
-        # indices and scan must change together between playback ticks.
-        with state_lock:
-            # Keep exact issue frames reachable even if --stride skipped them.
-            pending_source = state["pending_source_seek"]
-            if pending_source is not None:
-                state["pending_source_seek"] = None
-                indices = state["frame_indices"]
-                cursor = bisect_left(indices, pending_source)
-                if cursor == len(indices) or indices[cursor] != pending_source:
-                    indices.insert(cursor, pending_source)
-                frame_slider.max = max(1, len(indices) - 1)
-                apply_cursor(cursor, sync_slider=True)
-                update_indicator()
+    try:
+        while True:
+            # Viser callbacks run in worker threads. A clip and its comparison,
+            # indices and scan must change together between playback ticks.
+            with state_lock:
+                # Keep exact issue frames reachable even if --stride skipped them.
+                pending_source = state["pending_source_seek"]
+                if pending_source is not None:
+                    state["pending_source_seek"] = None
+                    indices = state["frame_indices"]
+                    cursor = bisect_left(indices, pending_source)
+                    if cursor == len(indices) or indices[cursor] != pending_source:
+                        indices.insert(cursor, pending_source)
+                    frame_slider.max = max(1, len(indices) - 1)
+                    apply_cursor(cursor, sync_slider=True)
+                    update_indicator()
 
-            pending_seek = state["pending_seek"]
-            if pending_seek is not None:
-                state["pending_seek"] = None
-                apply_cursor(int(pending_seek), sync_slider=False)
-                state["next_time"] = time.monotonic() + effective_frame_dt()
+                pending_seek = state["pending_seek"]
+                if pending_seek is not None:
+                    state["pending_seek"] = None
+                    apply_cursor(int(pending_seek), sync_slider=False)
+                    state["next_time"] = time.monotonic() + effective_frame_dt()
 
-            if state["playing"] and time.monotonic() >= state["next_time"]:
-                next_cursor = state["cursor"] + 1
-                if next_cursor >= len(state["frame_indices"]):
-                    if loop:
-                        next_cursor = 0
-                    else:
-                        next_cursor = len(state["frame_indices"]) - 1
-                        state["playing"] = False
-                        update_indicator()
-                apply_cursor(next_cursor, sync_slider=True)
-                state["next_time"] = time.monotonic() + effective_frame_dt()
+                if state["playing"] and time.monotonic() >= state["next_time"]:
+                    next_cursor = state["cursor"] + 1
+                    if next_cursor >= len(state["frame_indices"]):
+                        if loop:
+                            next_cursor = 0
+                        else:
+                            next_cursor = len(state["frame_indices"]) - 1
+                            state["playing"] = False
+                            update_indicator()
+                    apply_cursor(next_cursor, sync_slider=True)
+                    state["next_time"] = time.monotonic() + effective_frame_dt()
 
-            with server.atomic():
-                contact_highlights.update()
-                comparison.update(state["frame_indices"][state["cursor"]])
-            issues.advance()
-        time.sleep(min(0.01, max(effective_frame_dt() / 4.0, 0.001)))
+                with server.atomic():
+                    contact_highlights.update()
+                    comparison.update(state["frame_indices"][state["cursor"]])
+                issues.advance()
+                if time.monotonic() - last_repair_poll >= .2:
+                    repair.poll()
+                    last_repair_poll = time.monotonic()
+            time.sleep(min(0.01, max(effective_frame_dt() / 4.0, 0.001)))
+    finally:
+        repair.close()
 
 
 def main() -> None:
@@ -461,12 +440,6 @@ def main() -> None:
     frame_indices = list(_iter_frame_indices(int(qpos.shape[0]), args.start, args.end, args.stride))
     if not frame_indices:
         raise ValueError("No frames selected. Check --start/--end/--stride.")
-
-    if args.headless:
-        for frame_idx in tqdm(frame_indices, desc="Playing", unit="frame"):
-            _apply_qpos_frame(data, qpos[frame_idx])
-            mujoco.mj_forward(model, data)
-        return
 
     fps = float(args.fps) if args.fps is not None else 1.0 / manifest.timestep
     _run_mjviser(

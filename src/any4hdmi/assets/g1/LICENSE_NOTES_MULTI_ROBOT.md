@@ -1,0 +1,1 @@
+The generated URDFs derive from the existing g1_xmls snapshot 1c1d082f299126b9272e81c04121ff347c97fa8f. Its Unitree G1 MJCF and meshes are retained unchanged. That snapshot did not supply a license file; this packaging does not assign new rights to the original models or meshes. Refer to their original upstream licensing. The generator is in EGalahad/mimic-lite.

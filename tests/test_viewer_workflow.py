@@ -10,7 +10,7 @@ import mujoco
 import numpy as np
 
 from any4hdmi.core.format import save_motion, write_manifest
-from any4hdmi.scripts.viewer import _run_mjviser
+from any4hdmi.scripts.viewer.app import _run_mjviser
 from any4hdmi.utils.mjcf import qpos_names_from_model
 
 
@@ -80,8 +80,8 @@ class ViewerWorkflowTest(unittest.TestCase):
                 stage += 1
 
             with mock.patch('viser.ViserServer', return_value=server), \
-                 mock.patch('any4hdmi.scripts.viewer._create_motion_scene', return_value=scene), \
-                 mock.patch('any4hdmi.scripts.viewer.time.sleep', side_effect=interact):
+                 mock.patch('any4hdmi.scripts.viewer.app._create_motion_scene', return_value=scene), \
+                 mock.patch('any4hdmi.scripts.viewer.app.time.sleep', side_effect=interact):
                 with self.assertRaises(StopIteration):
                     _run_mjviser(model, mujoco.MjData(model), [('a.npz', root / 'corrected/motions/a.npz')], 'a.npz',
                                  start=0, end=-1, stride=3, frame_dt=1000, loop=False, port=8080)
@@ -171,8 +171,8 @@ class ViewerWorkflowTest(unittest.TestCase):
             server.scene.add_batched_glb.side_effect = reference_mesh
             server.scene.add_batched_glb.side_effect_handles = reference_handles
             with mock.patch('viser.ViserServer', return_value=server), \
-                 mock.patch('any4hdmi.scripts.viewer._create_motion_scene', return_value=scene), \
-                 mock.patch('any4hdmi.scripts.viewer.time.sleep', side_effect=interact):
+                 mock.patch('any4hdmi.scripts.viewer.app._create_motion_scene', return_value=scene), \
+                 mock.patch('any4hdmi.scripts.viewer.app.time.sleep', side_effect=interact):
                 with self.assertRaises(StopIteration):
                     _run_mjviser(model, data, [('group/a.npz', current), ('b.npz', second)], 'group/a.npz',
                                  start=0, end=-1, stride=2, frame_dt=1000, loop=False, port=8080)

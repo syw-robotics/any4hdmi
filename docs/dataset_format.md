@@ -10,7 +10,8 @@ Each converted dataset root contains:
 - one `motions/` directory
 - one motion `.npz` per clip
 
-The final standard format does not include per-motion sidecar JSON files, and it does not require a checked-in local MJCF asset tree.
+The final standard format does not include per-motion sidecar JSON files.
+G1 XML and meshes are bundled with the any4hdmi package, separately from motion datasets.
 
 ## Directory Layout
 
@@ -85,9 +86,12 @@ Example:
 }
 ```
 
-Current converter output writes `mjcf` as an `hf://...` string. The runtime also accepts
-relative local XML paths for compatibility, but the canonical generated format is the
-Hugging Face reference form shown above.
+Current converter output uses the G1 `hf://...` identifier shown above for
+portability. The runtime resolves it to bundled local assets without contacting
+Hugging Face. The `main` identifier and exact bundled snapshot revision are
+supported; other remote models or revisions must be supplied as local XML paths.
+Relative local XML paths are resolved against the dataset root. Keep each custom
+model's mesh/include files at the relative locations expected by its XML.
 
 ## Motion Files
 
@@ -134,7 +138,7 @@ In all three cases:
 ### Converter Code Organization
 
 Source-specific parsing, coordinate/rotation conversion, joint mapping, and segment
-handling stay in each converter module. Shared CSV CLI arguments, Hugging Face
+handling stay in each converter module. Shared CSV CLI arguments, bundled model
 MJCF arguments, output directory resolution, model loading notices, and frame
 slicing live in `src/any4hdmi/scripts/preprocess/common.py`.
 

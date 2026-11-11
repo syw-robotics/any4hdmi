@@ -43,17 +43,17 @@ def add_hf_mjcf_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--mjcf-repo",
         default=DEFAULT_MJCF_REPO_ID,
-        help="Hugging Face repo id that stores the MJCF and mesh assets.",
+        help="Bundled model repository identifier; no model assets are downloaded.",
     )
     parser.add_argument(
         "--mjcf-path",
         default=DEFAULT_MJCF_PATH,
-        help="Path to the MJCF file within --mjcf-repo.",
+        help="Bundled XML filename within --mjcf-repo.",
     )
     parser.add_argument(
         "--mjcf-revision",
         default=DEFAULT_MJCF_REVISION,
-        help="Revision passed to Hugging Face snapshot_download.",
+        help="Bundled model revision identifier (main or the bundled snapshot commit).",
     )
 
 
@@ -65,14 +65,9 @@ def resolve_output_dir(out_dir: str | Path) -> Path:
 
 
 def load_conversion_model(mjcf: MjcfInput) -> mujoco.MjModel:
-    print(f"Loading robot MJCF: {mjcf}", flush=True)
-    if isinstance(mjcf, str) and mjcf.startswith("hf://"):
-        print(
-            "Fetching the Hugging Face repository containing robot models and mesh assets "
-            "(reuses local cache; downloads missing files).",
-            flush=True,
-        )
-    return load_model(resolve_mjcf_path(mjcf))
+    path = resolve_mjcf_path(mjcf)
+    print(f"Loading local robot MJCF: {path}", flush=True)
+    return load_model(path)
 
 
 def slice_frames(motion: np.ndarray, start: int, end: int, stride: int) -> np.ndarray:

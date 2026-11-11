@@ -43,10 +43,10 @@ uv run any4hdmi-view --motion hf://elijahgalahad/any4hdmi-lafan@main/motions/dan
 ```
 
 Hugging Face inputs use a cached dataset repository snapshot; specifying one motion
-does not restrict the download to that file. The MJCF reference in the manifest may
-also need to be downloaded. Open the Viser URL printed by the command (default:
+does not restrict the download to that file. G1 model XML and meshes are bundled
+with any4hdmi and loaded locally without network access. Open the Viser URL printed by the command (default:
 `http://localhost:8080`). Use the **Motion** dropdown or **Previous / Next** to switch
-clips. With `--headless`, only the initial clip is checked and no GUI is started.
+clips.
 
 Press **Space** to pause/resume playback, or drag **Frame** to seek and pause.
 **Speed** ranges from 0.5× to 3.0× in steps of 0.5×.
@@ -55,6 +55,17 @@ In the **Robot** panel, toggle **Visual** and **Collision** independently. Colli
 geometry is shown in translucent green, using the MJCF's `contype` / `conaffinity`
 flags rather than vendor-specific geom groups. Visual is shown by default; models
 with only collision geometry show Collision by default. The ground stays visible.
+**Appearance** defaults to **Ghost**, a translucent blue rendering. Adjust **Ghost
+color** and **Ghost opacity**, or choose **Texture** to restore the model's original
+materials and textures. Appearance applies to the current and comparison robots;
+contact highlights retain the selected visual opacity. Collision stays green.
+
+Live reference previews can reuse `any4hdmi.scripts.viewer.scene.create_motion_scene`
+and `any4hdmi.scripts.viewer.contacts.ContactHighlights(..., live=True)` with their
+own MuJoCo model/data. Live mode labels yellow highlights **Feet near ground**
+(within 5 mm); it does not infer stable support from a single pose. Call
+`mujoco.mj_forward`, update the scene, and update highlights for each pose without
+stepping physics. Viewer imports do not load the dataset training dependencies.
 
 In **Contacts**, enable **Stable foot support** to color inferred supporting feet
 yellow. Fixed sole samples near the heel and forefoot must stay near the floor
@@ -148,3 +159,10 @@ the original timestep and all source frames in the selection. Playback speed,
 `--fps`, and `--stride` do not resample the export. Source files are preserved.
 The status field shows the saved path or an error. Open the exported dataset with
 `uv run any4hdmi-view --motion <new dataset directory>`.
+
+## Repair motions
+
+The **Repair** panel supports the current motion, selected motions, and all loaded
+motions. Check or repair in the background, compare candidates, and export under
+an explicit inclusion policy. See [Motion repair](repair.md) for the workflow,
+outcome definitions, and solver limitations.

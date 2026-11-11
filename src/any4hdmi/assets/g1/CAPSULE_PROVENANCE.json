@@ -1,0 +1,21 @@
+{
+  "source_asset_revision": "98d9d702424b2531538242256175f649cf053b42",
+  "modifications": "Retain existing limb capsules; replace pelvis/head spheres with axial capsules of half-length 1e-6 m. Freeze inferred inertials before conversion; articulation, masses, inertias and visuals unchanged.",
+  "validation": {
+    "g1-mode_13_15_capsule.xml": {
+      "position_error": 6.494804694057166e-14,
+      "orientation_error": 3.190051834533367e-13,
+      "mass_error": 1e-08,
+      "nq": 36,
+      "joints": 29
+    },
+    "g1-mode_5_11_capsule.xml": {
+      "position_error": 6.486478021372477e-14,
+      "orientation_error": 3.190051834533367e-13,
+      "mass_error": 1e-08,
+      "nq": 36,
+      "joints": 29
+    }
+  },
+  "urdf": "Capsules represented by cylinder and two spheres, without collision meshes; G1 fixed-marker tiny inertials retained."
+}

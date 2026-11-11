@@ -51,7 +51,7 @@ full/windowed dataset loading; FK caches are built from the exported motions.
   进入条件为高度 −10～20 mm、速度 ≤0.15 m/s，连续满足 60 ms（至少两帧）；
   保持条件放宽至 −15～30 mm、≤0.25 m/s，减少闪烁。每只脚任一点满足即可，整段预计算，
   与播放速度和 stride 无关。这是运动学推断，缓慢滑动仍可能误判，并非接触力测量。
-  实现：[viewer_support.py](../src/any4hdmi/scripts/viewer_support.py)、[viewer_contacts.py](../src/any4hdmi/scripts/viewer_contacts.py)。
+  实现：[viewer/support.py](../src/any4hdmi/scripts/viewer/support.py)、[viewer/contacts.py](../src/any4hdmi/scripts/viewer/contacts.py)。
 - **Ground 修正**：逐帧 FK，检查浮动机器人全部 visual/collision 几何的最低点（不只脚部）。
   必需抬升量为 `max(0, ground_z + clearance - min_z)`；默认 clearance 为 1 mm。
   前后两遍传播抬升量，限制新增高度变化速度为 0.2 m/s，同时保证不穿地。只修改 root Z，导出新数据集。
