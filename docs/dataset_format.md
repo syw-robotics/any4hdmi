@@ -149,7 +149,7 @@ with the same source schema can reuse an existing converter.
 
 ## Compatibility Notes
 
-- Viewer and filtering code should rely on `manifest.json` plus motion `.npz`.
+- Viewer and dataset loading code should rely on `manifest.json` plus motion `.npz`.
 - Dataset-global timing should live in `manifest.json -> timestep`.
 - Older manifests that stored a local string path for `mjcf` are still readable, but they are compatibility input, not the preferred emitted format.
 - New manifests should use `format_version = 2` and the `hf://...` MJCF string shown above.

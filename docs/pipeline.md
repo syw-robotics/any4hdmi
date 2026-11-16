@@ -1,6 +1,6 @@
 # Pipeline
 
-This document explains how `any4hdmi` converts source motion datasets into the unified `qpos` format, how the viewer and filter load them, and how the MJCF is resolved.
+This document explains how `any4hdmi` converts source motion datasets into the unified `qpos` format, how the viewer loads them, and how the MJCF is resolved.
 
 For the final on-disk dataset format, including `manifest.json` and motion `.npz`, see [`dataset_format.md`](./dataset_format.md).
 For runtime dataset loading and FK cache behavior, see [`dataset.md`](./dataset.md).
@@ -284,17 +284,13 @@ Replay a motion:
 uv run any4hdmi-view --motion output/lafan/motions/dance1_subject2.npz
 ```
 
-Filter a converted dataset with FK checks:
-
-```bash
-uv run any4hdmi-filter-dataset \
-  --input-root output/sonic \
-  --output-root output/sonic_filtered
-```
+Flat-ground motion filtering is maintained outside this package in
+`/mnt/any4hdmi_filter` and has been validated on converted bones-seed data.
+See that project's `README.zh-CN.md` for usage. Its exported `accepted.txt` can be
+passed to the dataset loader's `filenames_path` argument; source motions stay unchanged.
 
 ## Notes
 
 - Converted `qpos` is saved as `float32`.
 - Viewer loads motion as `float32` and assigns it into MuJoCo runtime state per frame.
 - Existing local-path manifests remain supported; no reconversion is needed if the XML and its assets are available.
-- The dataset filter reconstructs `qvel` from adjacent `qpos` frames and runs FK with `mujoco_warp` when available, otherwise it falls back to CPU MuJoCo.

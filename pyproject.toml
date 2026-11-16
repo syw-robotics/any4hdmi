@@ -32,13 +32,11 @@ warp = [
 
 [project.scripts]
 any4hdmi-view = "any4hdmi.scripts.viewer:main"
-any4hdmi-select = "any4hdmi.scripts.select:main"
 any4hdmi-ground = "any4hdmi.scripts.ground:main"
 any4hdmi-repair = "any4hdmi.scripts.repair:main"
 any4hdmi-convert-lafan = "any4hdmi.scripts.preprocess.lafan:main"
 any4hdmi-convert-sonic = "any4hdmi.scripts.preprocess.sonic:main"
 any4hdmi-convert-axellwppr = "any4hdmi.scripts.preprocess.axellwppr:main"
-any4hdmi-filter-dataset = "any4hdmi.scripts.filter:main"
 any4hdmi-upload = "any4hdmi.scripts.upload:main"
 any4hdmi-limmt-score = "any4hdmi.limmt.physical_filter:main"
 any4hdmi-limmt-train-hme = "any4hdmi.limmt.hme.train:main"

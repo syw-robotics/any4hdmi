@@ -183,5 +183,5 @@ load_any4hdmi_dataset(
 ## Related Docs
 
 - 数据集磁盘格式见 [dataset_format.md](/home/elijah/Documents/projects/simple-tracking/any4hdmi/docs/dataset_format.md)
-- 转换、viewer、filter 流程见 [pipeline.md](/home/elijah/Documents/projects/simple-tracking/any4hdmi/docs/pipeline.md)
+- 转换、viewer 流程及外部筛选工具说明见 [pipeline.md](pipeline.md)
 - 已归档的旧 online 设计文档见 [legacy/README.md](/home/elijah/Documents/projects/simple-tracking/any4hdmi/docs/legacy/README.md)

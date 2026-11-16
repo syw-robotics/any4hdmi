@@ -24,10 +24,8 @@ uv sync
 | --- | --- | --- |
 | Convert source datasets | `any4hdmi-convert-{lafan,sonic,axellwppr}` | [Conversion pipeline](docs/pipeline.md) |
 | Play, trim, compare, and inspect motions | `any4hdmi-view` | [Viewer](docs/viewer.md) |
-| Screen motions and export a whitelist | `any4hdmi-select` | [Interactive selection](docs/selection.md) |
 | Repair ground penetration and self collision | `any4hdmi-repair` or the viewer's Repair panel | [Motion repair](docs/repair.md) |
 | Correct foot penetration | `any4hdmi-ground` | [Grounding](docs/grounding.md) |
-| Filter a dataset by motion checks | `any4hdmi-filter-dataset` | [Filtering](docs/pipeline.md#typical-commands) |
 | Load motions for training | `load_any4hdmi_dataset()` | [Dataset runtime](docs/dataset.md) |
 | Score quality, train HME, and explore embeddings | `any4hdmi-limmt-*` | [LIMMT](src/any4hdmi/limmt/README.md) |
 | Publish to Hugging Face | `any4hdmi-upload` | [Publishing](#publish-a-dataset) |
@@ -70,19 +68,6 @@ uv run any4hdmi-convert-axellwppr \
 
 See the [conversion guide](docs/pipeline.md) for source downloads and examples.
 
-### Select motions
-
-```bash
-uv run any4hdmi-select \
-  --input-path output/lafan \
-  --project-path output/lafan_selection
-```
-
-Open the printed URL (default: `http://127.0.0.1:8081`), batch filter the dataset,
-review decisions, and export a whitelist. The project stores rules, cached
-features, and review state separately from the source.
-See [interactive selection](docs/selection.md) for the workflow and loader integration.
-
 ### Repair motions
 
 ```bash
@@ -111,15 +96,11 @@ See [grounding](docs/grounding.md) for floor height and correction limits.
 
 ### Filter a dataset
 
-```bash
-uv run any4hdmi-filter-dataset \
-  --input-root output/lafan \
-  --output-root output/lafan_filtered
-```
-
-Apply FK-based motion checks and copy kept clips to the output dataset.
-Add `--dry-run` to emit a report without copying motions.
-See the [conversion pipeline](docs/pipeline.md#typical-commands) for more examples.
+Flat-ground motion filtering is maintained separately in `/mnt/any4hdmi_filter`
+and has been validated on bones-seed converted to the any4hdmi format.
+It is currently outside this package; see that project's `README.zh-CN.md` for usage.
+Pass its exported `accepted.txt` to `load_any4hdmi_dataset(..., filenames_path=...)`
+to load the accepted motions from the original dataset.
 
 ### Load in Python
 
@@ -179,7 +160,6 @@ src/any4hdmi/
 ├── assets/g1/          # Bundled G1 XML, meshes, and source provenance
 ├── core/
 │   ├── repair/          # motion.py: solver; geometry.py: checks; dataset.py: batch sessions
-│   ├── selection/       # features.py: screening; project.py: cache, decisions, exports
 │   ├── editing.py      # Clip export
 │   ├── grounding.py    # Foot penetration correction
 │   ├── support.py      # Shared foot support inference
@@ -189,9 +169,7 @@ src/any4hdmi/
 │   ├── preprocess/     # Source converters and shared conversion helpers
 │   ├── viewer/         # app.py: playback; comparison, contacts, issues, support
 │   ├── repair/         # cli.py: batch command; panel.py: viewer controls
-│   ├── select.py       # Interactive motion selection
 │   ├── ground.py       # Batch foot penetration correction
-│   ├── filter.py       # Dataset filtering
 │   └── upload.py       # Hugging Face publishing
 ├── dataset/            # Runtime loading, full/windowed storage, FK caches
 ├── fk/                 # Forward kinematics runners
@@ -213,5 +191,4 @@ the feature they cover.
 - [Viewer: trimming, diagnostics, and comparison](docs/viewer.md)
 - [Ground penetration correction](docs/grounding.md)
 - [Motion repair: Viser and batch CLI](docs/repair.md)
-- [Interactive motion selection](docs/selection.md)
 - [LIMMT: quality scoring and embeddings](src/any4hdmi/limmt/README.md)
